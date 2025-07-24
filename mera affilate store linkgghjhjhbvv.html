@@ -1,0 +1,178 @@
+import zipfile
+import os
+
+# Create a working directory for the site files
+project_dir = "/mnt/data/productsite"
+os.makedirs(project_dir, exist_ok=True)
+
+# Create basic PHP + HTML + MySQL files
+
+# db.php
+db_php = """<?php
+$host = 'localhost';
+$user = 'root';
+$pass = '';
+$db = 'productsite';
+$conn = new mysqli($host, $user, $pass, $db);
+if ($conn->connect_error) {
+    die('Database connection failed: ' . $conn->connect_error);
+}
+?>
+"""
+
+# login.php
+login_php = """<?php
+session_start();
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = $_POST['username'];
+    $password = $_POST['password'];
+
+    // Simple static admin login (for demo)
+    if ($username === 'admin' && $password === 'admin123') {
+        $_SESSION['admin'] = true;
+        header('Location: admin.php');
+        exit();
+    } else {
+        $error = "Invalid credentials";
+    }
+}
+?>
+<!DOCTYPE html>
+<html>
+<head><title>Admin Login</title></head>
+<body>
+<h2>Admin Login</h2>
+<form method="POST">
+    <input type="text" name="username" placeholder="Username" required><br>
+    <input type="password" name="password" placeholder="Password" required><br>
+    <button type="submit">Login</button>
+</form>
+<?php if (!empty($error)) echo "<p style='color:red;'>$error</p>"; ?>
+</body>
+</html>
+"""
+
+# logout.php
+logout_php = """<?php
+session_start();
+session_destroy();
+header('Location: login.php');
+exit();
+?>
+"""
+
+# admin.php
+admin_php = """<?php
+session_start();
+if (!isset($_SESSION['admin'])) {
+    header('Location: login.php');
+    exit();
+}
+?>
+<!DOCTYPE html>
+<html>
+<head><title>Add Product</title></head>
+<body>
+<h2>Add New Product</h2>
+<form action="add_product.php" method="POST">
+    <input type="text" name="name" placeholder="Product Name" required><br>
+    <textarea name="description" placeholder="Description" required></textarea><br>
+    <input type="text" name="image" placeholder="Image URL" required><br>
+    <input type="text" name="video" placeholder="Video URL (optional)"><br>
+    <input type="text" name="link" placeholder="Buy Now Link" required><br>
+    <button type="submit">Add Product</button>
+</form>
+<br><a href="logout.php">Logout</a>
+</body>
+</html>
+"""
+
+# add_product.php
+add_product_php = """<?php
+session_start();
+if (!isset($_SESSION['admin'])) {
+    header('Location: login.php');
+    exit();
+}
+include 'db.php';
+
+$name = $_POST['name'];
+$desc = $_POST['description'];
+$image = $_POST['image'];
+$video = $_POST['video'];
+$link = $_POST['link'];
+
+$stmt = $conn->prepare("INSERT INTO products (name, description, image, video, link) VALUES (?, ?, ?, ?, ?)");
+$stmt->bind_param("sssss", $name, $desc, $image, $video, $link);
+$stmt->execute();
+$stmt->close();
+$conn->close();
+
+header("Location: admin.php");
+exit();
+?>
+"""
+
+# index.php
+index_php = """<?php
+include 'db.php';
+$result = $conn->query("SELECT * FROM products");
+?>
+<!DOCTYPE html>
+<html>
+<head><title>Products</title></head>
+<body>
+<h2>Available Products</h2>
+<?php while($row = $result->fetch_assoc()): ?>
+    <div style="border:1px solid #ccc; margin:10px; padding:10px;">
+        <h3><?= htmlspecialchars($row['name']) ?></h3>
+        <img src="<?= htmlspecialchars($row['image']) ?>" width="200"><br>
+        <p><?= htmlspecialchars($row['description']) ?></p>
+        <?php if (!empty($row['video'])): ?>
+            <video width="320" height="240" controls>
+                <source src="<?= htmlspecialchars($row['video']) ?>" type="video/mp4">
+            </video><br>
+        <?php endif; ?>
+        <a href="<?= htmlspecialchars($row['link']) ?>" target="_blank">Buy Now</a>
+    </div>
+<?php endwhile; ?>
+</body>
+</html>
+"""
+
+# SQL file
+sql_content = """
+CREATE DATABASE IF NOT EXISTS productsite;
+USE productsite;
+CREATE TABLE IF NOT EXISTS products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    image VARCHAR(255) NOT NULL,
+    video VARCHAR(255),
+    link VARCHAR(255) NOT NULL
+);
+"""
+
+# Write all files to the project directory
+files = {
+    "db.php": db_php,
+    "login.php": login_php,
+    "logout.php": logout_php,
+    "admin.php": admin_php,
+    "add_product.php": add_product_php,
+    "index.php": index_php,
+    "product.sql": sql_content,
+}
+
+for filename, content in files.items():
+    with open(os.path.join(project_dir, filename), "w") as f:
+        f.write(content)
+
+# Create a ZIP file
+zip_path = "/mnt/data/productsite.zip"
+with zipfile.ZipFile(zip_path, 'w') as zipf:
+    for filename in files:
+        zipf.write(os.path.join(project_dir, filename), arcname=filename)
+
+zip_path
